@@ -34,7 +34,6 @@ import {
 } from '../main_utils';
 import { ReportDefinitionSchemaType } from '../../../../server/model';
 import moment from 'moment';
-import { converter } from '../../report_definitions/utils';
 import {
   permissionsMissingToast,
   permissionsMissingActions,
@@ -426,12 +425,12 @@ export function ReportDefinitionDetails(props: { match?: any; setBreadcrumbs?: a
       reportHeader:
         reportParams.core_params.hasOwnProperty('header') &&
         reportParams.core_params.header != ''
-          ? converter.makeMarkdown(reportParams.core_params.header)
+          ? reportParams.core_params.header
           : `\u2014`,
       reportFooter:
         reportParams.core_params.hasOwnProperty('footer') &&
         reportParams.core_params.footer != ''
-          ? converter.makeMarkdown(reportParams.core_params.footer)
+          ? reportParams.core_params.footer
           : `\u2014`,
       triggerType: triggerType,
       scheduleDetails: triggerParams
@@ -497,7 +496,7 @@ export function ReportDefinitionDetails(props: { match?: any; setBreadcrumbs?: a
     return (
       <EuiLink
         onClick={downloadIconDownload}
-        id="generateReportFromDetailsButton"
+        id="generateReportFromDetailsFileFormat"
       >
         {formatUpper + ' '}
         <EuiIcon type="importAction" />
@@ -507,7 +506,10 @@ export function ReportDefinitionDetails(props: { match?: any; setBreadcrumbs?: a
 
   const sourceURL = (data: ReportDefinitionDetails) => {
     return (
-      <EuiLink href={`${data.baseUrl}`} target="_blank">
+      <EuiLink
+        id="reportDefinitionSourceURL"
+        href={`${data.baseUrl}`} target="_blank"
+      >
         {data['source']}
       </EuiLink>
     );

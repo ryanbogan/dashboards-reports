@@ -5,7 +5,6 @@
 
 /* eslint-disable no-restricted-globals */
 import $ from 'jquery';
-import dateMath from '@elastic/datemath';
 import { i18n } from '@osd/i18n';
 import { readStreamToFile } from '../main/main_utils';
 import {
@@ -21,9 +20,7 @@ import {
   popoverMenuDiscover,
   getMenuItem,
 } from './context_menu_ui';
-import { timeRangeMatcher } from '../utils/utils';
 import { parse } from 'url';
-import { unhashUrl } from '../../../../../src/plugins/opensearch_dashboards_utils/public';
 import { uiSettingsService } from '../utils/settings_service';
 
 const generateInContextReport = async (
@@ -125,11 +122,9 @@ const generateInContextReport = async (
     });
 };
 
-// try to match uuid followed by '?' in URL, which would be the saved search id for discover URL
-const getUuidFromUrl = () =>
-  window.location.href.match(
-    /(\b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b)\?/
-  );
+// try to match uuid and user entered custom-id followed by '?' in URL, which would be the saved search id for discover URL
+// custom id example: v1s-f00-b4r1-01, Filebeat-Apache-Dashboard-ecs,
+const getUuidFromUrl = () => window.location.href.match(/([0-9a-zA-Z-]+)\?/);
 const isDiscover = () => window.location.href.includes('discover');
 
 // open Download drop-down

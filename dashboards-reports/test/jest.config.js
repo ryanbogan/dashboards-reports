@@ -13,10 +13,11 @@ module.exports = {
   testMatch: ['**/*.test.js', '**/*.test.jsx', '**/*.test.ts', '**/*.test.tsx'],
   clearMocks: true,
   modulePathIgnorePatterns: ['<rootDir>/offline-module-cache/'],
-  testPathIgnorePatterns: ['<rootDir>/build/', '<rootDir>/node_modules/'],
+  testPathIgnorePatterns: ['<rootDir>/build/', '<rootDir>/node_modules/', '<rootDir>/public/components/report_definitions/delivery/'],
   transformIgnorePatterns: ['<rootDir>/node_modules'],
   moduleNameMapper: {
     '\\.(css|less|sass|scss)$': '<rootDir>/test/__mocks__/styleMock.js',
     '\\.(gif|ttf|eot|svg)$': '<rootDir>/test/__mocks__/fileMock.js',
   },
+  testEnvironment: 'jsdom',
 };

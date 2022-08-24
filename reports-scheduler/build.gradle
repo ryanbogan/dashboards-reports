@@ -5,23 +5,35 @@
 
 import org.opensearch.gradle.test.RestIntegTestTask
 import java.util.concurrent.Callable
+import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
 
 buildscript {
     ext {
         opensearch_group = "org.opensearch"
-        opensearch_version = System.getProperty("opensearch.version", "1.2.0-SNAPSHOT")
-        // 1.0.0 -> 1.0.0.0, and 1.0.0-SNAPSHOT -> 1.0.0.0-SNAPSHOT
-        opensearch_build = opensearch_version.replaceAll(/(\.\d)([^\d]*)$/, '$1.0$2')
+
+        isSnapshot = "true" == System.getProperty("build.snapshot", "true")
+        opensearch_version = System.getProperty("opensearch.version", "2.1.0-SNAPSHOT")
+        buildVersionQualifier = System.getProperty("build.version_qualifier", "")
+        // 2.0.0-rc1-SNAPSHOT -> 2.0.0.0-rc1-SNAPSHOT
+        version_tokens = opensearch_version.tokenize('-')
+        opensearch_build = version_tokens[0] + '.0'
+        if (buildVersionQualifier) {
+            opensearch_build += "-${buildVersionQualifier}"
+        }
+        if (isSnapshot) {
+            opensearch_build += "-SNAPSHOT"
+        }
+
         common_utils_version = System.getProperty("common_utils.version", opensearch_build)
         job_scheduler_version = System.getProperty("job_scheduler.version", opensearch_build)        
-        kotlin_version = System.getProperty("kotlin.version", "1.4.0")
+        kotlin_version = System.getProperty("kotlin.version", "1.6.0")
     }
 
     repositories {
         mavenLocal()
         maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
         mavenCentral()
-        jcenter()
+        maven { url "https://plugins.gradle.org/m2/" }
     }
 
     dependencies {
@@ -43,6 +55,7 @@ apply plugin: 'java'
 apply plugin: 'jacoco'
 apply plugin: 'idea'
 apply plugin: 'opensearch.opensearchplugin'
+apply plugin: 'opensearch.pluginzip'
 apply plugin: 'opensearch.testclusters'
 apply plugin: 'io.gitlab.arturbosch.detekt'
 apply plugin: 'org.jetbrains.kotlin.jvm'
@@ -60,12 +73,37 @@ opensearchplugin {
     extendedPlugins = ['opensearch-job-scheduler']
 }
 
+publishing {
+    publications {
+        pluginZip(MavenPublication) { publication ->
+            pom {
+                name = 'opensearch-reports-scheduler'
+                description = 'Scheduler for Dashboards Reports Plugin'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'OpenSearch'
+                        url = 'https://github.com/opensearch-project/dashboards-reports'
+                    }
+                }
+            }
+        }
+    }
+}
+
 allOpen {
     annotation("org.opensearch.reportsscheduler.util.OpenForTesting")
 }
 
 configurations {
     ktlint
+    testCompile
+    testRuntime
 }
 
 detekt {
@@ -90,55 +128,55 @@ ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE.txt')
-    isSnapshot = "true" == System.getProperty("build.snapshot", "true")
 }
 
 plugins.withId('java') {
-    sourceCompatibility = targetCompatibility = "1.8"
+    sourceCompatibility = targetCompatibility = "11"
 }
 
 plugins.withId('org.jetbrains.kotlin.jvm') {
-    compileKotlin.kotlinOptions.jvmTarget = compileTestKotlin.kotlinOptions.jvmTarget = "1.8"
+    compileKotlin.kotlinOptions.jvmTarget = compileTestKotlin.kotlinOptions.jvmTarget = "11"
 }
 
 allprojects {
     group = "org.opensearch"
-    version = "${opensearch_version}" - "-SNAPSHOT" + ".0"
-    if (isSnapshot) {
-        version += "-SNAPSHOT"
-    } 
+    version = "${opensearch_build}"
     plugins.withId('java') {
-        sourceCompatibility = targetCompatibility = "1.8"
+        sourceCompatibility = targetCompatibility = "11"
     }
 }
 
 repositories {
     mavenLocal()
     maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
+    mavenCentral()
+    maven { url "https://plugins.gradle.org/m2/" }
 }
 
 dependencies {
-    compile "org.opensearch:opensearch:${opensearch_version}"
-    compile "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
-    compile "org.jetbrains.kotlin:kotlin-stdlib-common:${kotlin_version}"
-    compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9"
-    compile "${group}:common-utils:${common_utils_version}"
+    implementation "org.opensearch:opensearch:${opensearch_version}"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-common:${kotlin_version}"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9"
+    implementation "${group}:common-utils:${common_utils_version}"
     compileOnly "${group}:opensearch-job-scheduler-spi:${job_scheduler_version}"
-    compile group: 'com.google.guava', name: 'guava', version: '15.0'
-    compile "org.json:json:20180813"
-    compile group: 'com.github.wnameless', name: 'json-flattener', version: '0.1.0'
+    implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
+    implementation "org.json:json:20180813"
+    implementation group: 'com.github.wnameless', name: 'json-flattener', version: '0.1.0'
     implementation 'org.jsoup:jsoup:1.14.3'
+    implementation 'com.google.code.gson:gson:2.8.9'
+    implementation "org.jetbrains.kotlin:kotlin-test:${kotlin_version}"
 
     testImplementation(
             'org.assertj:assertj-core:3.16.1',
             'org.junit.jupiter:junit-jupiter-api:5.6.2'
     )
-    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.6.2')
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.6.2')
     testCompile "org.opensearch.test:framework:${opensearch_version}"
     testCompile "org.jetbrains.kotlin:kotlin-test:${kotlin_version}"
     testImplementation "com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0"
     testCompile "org.mockito:mockito-core:3.12.4"
-    testCompile 'com.google.code.gson:gson:2.8.6'
+    testCompile 'com.google.code.gson:gson:2.8.9'
 
     ktlint "com.pinterest:ktlint:0.33.0"
 }
@@ -163,8 +201,8 @@ test {
 File repo = file("$buildDir/testclusters/repo")
 def _numNodes = findProperty('numNodes') as Integer ?: 1
 
-def es_tmp_dir = rootProject.file('build/private/es_tmp').absoluteFile
-es_tmp_dir.mkdirs()
+def opensearch_tmp_dir = rootProject.file('build/private/es_tmp').absoluteFile
+opensearch_tmp_dir.mkdirs()
 
 // As of ES 7.7 the sample-extension-plugin is being added to the list of plugins for the testCluster during build before
 // the job-scheduler plugin is causing build failures.
@@ -185,15 +223,16 @@ tasks.withType(licenseHeaders.class) {
 }
 
 task integTest(type: RestIntegTestTask) {
-    description = "Run tests against a cluster that has security enabled"
+    description = "Run tests against a cluster"
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 }
 tasks.named("check").configure { dependsOn(integTest) }
 
 integTest {
+    dependsOn "bundlePlugin"
     systemProperty 'tests.security.manager', 'false'
-    systemProperty 'java.io.tmpdir', es_tmp_dir.absolutePath
+    systemProperty 'java.io.tmpdir', opensearch_tmp_dir.absolutePath
 
     systemProperty "https", System.getProperty("https")
     systemProperty "user", System.getProperty("user")
@@ -220,13 +259,23 @@ integTest {
     }
 
     if (System.getProperty("tests.clustername") != null) {
-        exclude 'org/opensearch/reportsscheduler/ReportsSchedulerPluginIT.class'
+        exclude 'org/opensearch/integTest/ReportsSchedulerPluginIT.class'
+    }
+
+    if (System.getProperty("tests.rest.bwcsuite") == null) {
+        filter {
+            excludeTestsMatching "org.opensearch.integTest.bwc.*IT"
+        }
     }
 }
+
+
 
 Zip bundle = (Zip) project.getTasks().getByName("bundlePlugin");
 integTest.dependsOn(bundle)
 integTest.getClusters().forEach{c -> c.plugin(project.getObjects().fileProperty().value(bundle.getArchiveFile()))}
+
+String jobSchedulerURL = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + opensearch_version.replace("-SNAPSHOT", "") + "/latest/linux/x64/tar/builds/opensearch/plugins/opensearch-job-scheduler-" + opensearch_build.replace("-SNAPSHOT", "") + ".zip"
 
 testClusters.integTest {
     testDistribution = "INTEG_TEST"
@@ -237,11 +286,20 @@ testClusters.integTest {
             return new RegularFile() {
                 @Override
                 File getAsFile() {
+                    File dir = new File("src/test/resources/job-scheduler")
+                    if (!dir.exists()) {
+                        dir.mkdirs()
+                    }
+                    File file = new File(dir, "opensearch-job-scheduler-" + opensearch_build + ".zip")
+                    if (!file.exists()) {
+                        new URL(jobSchedulerURL).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                    }
                     return fileTree("src/test/resources/job-scheduler").getSingleFile()
                 }
             }
         }
     }))
+
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
     if (_numNodes > 1) numberOfNodes = _numNodes
     // When running integration tests it doesn't forward the --debug-jvm to the cluster anymore
@@ -255,6 +313,212 @@ testClusters.integTest {
         }
     }
     setting 'path.repo', repo.absolutePath
+}
+
+// For job-scheduler and reports-scheduler, the latest opensearch releases appear to be 1.1.0.0.
+String bwcVersion = "1.1.0.0"
+String baseName = "reportsSchedulerBwcCluster"
+String bwcFilePath = "src/test/resources/bwc"
+String bwcJobSchedulerURL = "https://ci.opensearch.org/ci/dbc/bundle-build/1.1.0/20210930/linux/x64/builds/opensearch/plugins/opensearch-job-scheduler-1.1.0.0.zip"
+String bwcReportsSchedulerURL = "https://ci.opensearch.org/ci/dbc/bundle-build/1.1.0/20210930/linux/x64/builds/opensearch/plugins/opensearch-reports-scheduler-1.1.0.0.zip"
+
+2.times {i ->
+    testClusters {
+        "${baseName}$i" {
+            testDistribution = "ARCHIVE"
+            versions = ["1.1.0", opensearch_version]
+            numberOfNodes = 3
+            plugin(provider(new Callable<RegularFile>(){
+                @Override
+                RegularFile call() throws Exception {
+                    return new RegularFile() {
+                        @Override
+                        File getAsFile() {
+                            File dir = new File(bwcFilePath + "/job-scheduler/" + bwcVersion)
+                            if (!dir.exists()) {
+                                dir.mkdirs()
+                            }
+                            File file = new File(dir, "opensearch-job-scheduler-" + bwcVersion + ".zip")
+                            if (!file.exists()) {
+                                new URL(bwcJobSchedulerURL).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                            }
+                            return fileTree(bwcFilePath + "/job-scheduler/" + bwcVersion).getSingleFile()
+                        }
+                    }
+                }
+            }))
+            plugin(provider(new Callable<RegularFile>(){
+                @Override
+                RegularFile call() throws Exception {
+                    return new RegularFile() {
+                        @Override
+                        File getAsFile() {
+                            File dir = new File(bwcFilePath + "/reports-scheduler/" + bwcVersion)
+                            if (!dir.exists()) {
+                                dir.mkdirs()
+                            }
+                            File file = new File(dir, "opensearch-reports-scheduler-" + bwcVersion + ".zip")
+                            if (!file.exists()) {
+                                new URL(bwcReportsSchedulerURL).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                            }
+                            return fileTree(bwcFilePath + "/reports-scheduler/" + bwcVersion).getSingleFile()
+                        }
+                    }
+                }
+            }))
+            setting 'path.repo', "${buildDir}/cluster/shared/repo/${baseName}"
+            setting 'http.content_type.required', 'true'
+        }
+    }
+}
+
+List<Provider<RegularFile>> plugins = []
+
+// Ensure the artifact for the current project version is available to be used for the bwc tests
+task prepareBwcTests {
+    dependsOn bundle
+    doLast {
+        plugins = [
+                provider(new Callable<RegularFile>(){
+                    @Override
+                    RegularFile call() throws Exception {
+                        return new RegularFile() {
+                            @Override
+                            File getAsFile() {
+                                File dir = new File(bwcFilePath + "/job-scheduler/" + project.version)
+                                if (!dir.exists()) {
+                                    dir.mkdirs()
+                                }
+                                File file = new File(dir, "opensearch-reports-scheduler-" + project.version + ".zip")
+                                if (!file.exists()) {
+                                    new URL(jobSchedulerURL).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                                }
+                                return fileTree(bwcFilePath + "/job-scheduler/" + project.version).getSingleFile()
+                            }
+                        }
+                    }
+                }),
+                project.getObjects().fileProperty().value(bundle.getArchiveFile())
+        ]
+    }
+}
+
+// Create two test clusters with 3 nodes of the old version
+2.times {i ->
+    task "${baseName}#oldVersionClusterTask$i"(type: StandaloneRestIntegTestTask) {
+        dependsOn 'prepareBwcTests'
+        useCluster testClusters."${baseName}$i"
+        filter {
+            includeTestsMatching "org.opensearch.integTest.bwc.*IT"
+        }
+        systemProperty 'tests.rest.bwcsuite', 'old_cluster'
+        systemProperty 'tests.rest.bwcsuite_round', 'old'
+        systemProperty 'tests.plugin_bwc_version', bwcVersion
+        nonInputProperties.systemProperty('tests.rest.cluster', "${-> testClusters."${baseName}$i".allHttpSocketURI.join(",")}")
+        nonInputProperties.systemProperty('tests.clustername', "${-> testClusters."${baseName}$i".getName()}")
+    }
+}
+
+// Upgrade one node of the old cluster to new OpenSearch version with upgraded plugin version.
+// This results in a mixed cluster with 2 nodes on the old version and 1 upgraded node.
+// This is also used as a one third upgraded cluster for a rolling upgrade.
+task "${baseName}#mixedClusterTask"(type: StandaloneRestIntegTestTask) {
+    useCluster testClusters."${baseName}0"
+    dependsOn "${baseName}#oldVersionClusterTask0"
+    doFirst {
+        testClusters."${baseName}0".upgradeNodeAndPluginToNextVersion(plugins)
+    }
+    filter {
+        includeTestsMatching "org.opensearch.integTest.bwc.*IT"
+    }
+    systemProperty 'tests.rest.bwcsuite', 'mixed_cluster'
+    systemProperty 'tests.rest.bwcsuite_round', 'first'
+    systemProperty 'tests.plugin_bwc_version', bwcVersion
+    nonInputProperties.systemProperty('tests.rest.cluster', "${-> testClusters."${baseName}0".allHttpSocketURI.join(",")}")
+    nonInputProperties.systemProperty('tests.clustername', "${-> testClusters."${baseName}0".getName()}")
+}
+
+// Upgrade the second node to new OpenSearch version with upgraded plugin version after the first node is upgraded.
+// This results in a mixed cluster with 1 node on the old version and 2 upgraded nodes.
+// This is used for rolling upgrade.
+task "${baseName}#twoThirdsUpgradedClusterTask"(type: StandaloneRestIntegTestTask) {
+    dependsOn "${baseName}#mixedClusterTask"
+    useCluster testClusters."${baseName}0"
+    doFirst {
+        testClusters."${baseName}0".upgradeNodeAndPluginToNextVersion(plugins)
+    }
+    filter {
+        includeTestsMatching "org.opensearch.integTest.bwc.*IT"
+    }
+    systemProperty 'tests.rest.bwcsuite', 'mixed_cluster'
+    systemProperty 'tests.rest.bwcsuite_round', 'second'
+    systemProperty 'tests.plugin_bwc_version', bwcVersion
+    nonInputProperties.systemProperty('tests.rest.cluster', "${-> testClusters."${baseName}0".allHttpSocketURI.join(",")}")
+    nonInputProperties.systemProperty('tests.clustername', "${-> testClusters."${baseName}0".getName()}")
+}
+
+// Upgrade the third node to new OpenSearch version with upgraded plugin version after the second node is upgraded.
+// This results in a fully upgraded cluster.
+// This is used for rolling upgrade.
+task "${baseName}#rollingUpgradeClusterTask"(type: StandaloneRestIntegTestTask) {
+    dependsOn "${baseName}#twoThirdsUpgradedClusterTask"
+    useCluster testClusters."${baseName}0"
+    doFirst {
+        testClusters."${baseName}0".upgradeNodeAndPluginToNextVersion(plugins)
+    }
+    filter {
+        includeTestsMatching "org.opensearch.integTest.bwc.*IT"
+    }
+    mustRunAfter "${baseName}#mixedClusterTask"
+    systemProperty 'tests.rest.bwcsuite', 'mixed_cluster'
+    systemProperty 'tests.rest.bwcsuite_round', 'third'
+    systemProperty 'tests.plugin_bwc_version', bwcVersion
+    nonInputProperties.systemProperty('tests.rest.cluster', "${-> testClusters."${baseName}0".allHttpSocketURI.join(",")}")
+    nonInputProperties.systemProperty('tests.clustername', "${-> testClusters."${baseName}0".getName()}")
+}
+
+// Upgrade all the nodes of the old cluster to new OpenSearch version with upgraded plugin version
+// at the same time resulting in a fully upgraded cluster.
+task "${baseName}#fullRestartClusterTask"(type: StandaloneRestIntegTestTask) {
+    dependsOn "${baseName}#oldVersionClusterTask1"
+    useCluster testClusters."${baseName}1"
+    doFirst {
+        testClusters."${baseName}1".upgradeAllNodesAndPluginsToNextVersion(plugins)
+    }
+    filter {
+        includeTestsMatching "org.opensearch.integTest.bwc.*IT"
+    }
+    systemProperty 'tests.rest.bwcsuite', 'upgraded_cluster'
+    systemProperty 'tests.plugin_bwc_version', bwcVersion
+    nonInputProperties.systemProperty('tests.rest.cluster', "${-> testClusters."${baseName}1".allHttpSocketURI.join(",")}")
+    nonInputProperties.systemProperty('tests.clustername', "${-> testClusters."${baseName}1".getName()}")
+}
+
+// A bwc test suite which runs all the bwc tasks combined
+task bwcTestSuite(type: StandaloneRestIntegTestTask) {
+    exclude '**/*Test*'
+    exclude '**/*IT*'
+    dependsOn tasks.named("${baseName}#mixedClusterTask")
+    dependsOn tasks.named("${baseName}#rollingUpgradeClusterTask")
+    dependsOn tasks.named("${baseName}#fullRestartClusterTask")
+}
+
+task integTestRemote(type: RestIntegTestTask) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    systemProperty 'tests.security.manager', 'false'
+    systemProperty 'java.io.tmpdir', opensearch_tmp_dir.absolutePath
+
+    systemProperty "https", System.getProperty("https")
+    systemProperty "user", System.getProperty("user")
+    systemProperty "password", System.getProperty("password")
+
+    // Only rest case can run with remote cluster
+    if (System.getProperty("tests.rest.cluster") != null) {
+        filter {
+            includeTestsMatching "org.opensearch.integTest.rest.*IT"
+        }
+    }
 }
 
 run {
@@ -295,3 +559,21 @@ if (!usingRemoteCluster && !usingMultiNode) {
 }
 
 apply from: 'build-tools/pkgbuild.gradle'
+
+// updateVersion: Task to auto increment to the next development iteration
+task updateVersion {
+    onlyIf { System.getProperty('newVersion') }
+    doLast {
+        ext.newVersion = System.getProperty('newVersion')
+        println "Setting version to ${newVersion}."
+         // String tokenization to support -SNAPSHOT
+        ant.replaceregexp(file:'build.gradle', match: '"opensearch.version", "\\d.*"', replace: '"opensearch.version", "' + newVersion.tokenize('-')[0] + '-SNAPSHOT"', flags:'g', byline:true)
+        ant.replaceregexp(file:'../.github/workflows/dashboards-reports-test-and-build-workflow.yml', match:'OPENSEARCH_PLUGIN_VERSION: \\d+.\\d+.\\d+.\\d+', replace:'OPENSEARCH_PLUGIN_VERSION: ' + newVersion.tokenize('-')[0] + '.0', flags:'g', byline:true)
+        ant.replaceregexp(file:'../.github/workflows/draft-release-notes-workflow.yml', match:'version: \\d+.\\d+.\\d+.\\d+', replace:'version: ' + newVersion.tokenize('-')[0] + '.0', flags:'g', byline:true)
+        // Match key version in JSON files.
+        ant.replaceregexp(file:'../dashboards-reports/opensearch_dashboards.json', match:'"version": "\\d+.\\d+.\\d+.\\d+', replace:'"version": ' + '"' + newVersion.tokenize('-')[0] + '.0', flags:'g', byline:true)
+        ant.replaceregexp(file:'../dashboards-reports/package.json', match:'"version": "\\d+.\\d+.\\d+.\\d+', replace:'"version": ' + '"' + newVersion.tokenize('-')[0] + '.0', flags:'g', byline:true)
+        // Match key opensearchDashboardsVersion in JSON files.
+        ant.replaceregexp(file:'../dashboards-reports/opensearch_dashboards.json', match:'"opensearchDashboardsVersion": "\\d+.\\d+.\\d+', replace:'"opensearchDashboardsVersion": ' + '"' + newVersion.tokenize('-')[0], flags:'g', byline:true)
+    }
+}
